@@ -110,6 +110,11 @@ ALTER TABLE ONLY public.movies ALTER COLUMN id SET DEFAULT nextval('public.movie
 --
 
 COPY public.actors (id, name, age, gender) FROM stdin;
+1	Mjjj	29	female
+2	Scarlt Johanson	39	female
+3	Luca Brody	49	male
+4	Jack Davon	56	male
+5	Justin Biber	27	male
 \.
 
 
@@ -118,6 +123,11 @@ COPY public.actors (id, name, age, gender) FROM stdin;
 --
 
 COPY public.movies (id, title, release_date) FROM stdin;
+3	The batman	2018
+1	Godfather	2018
+2	Dangle	1987
+4	The irishman	2004
+5	Troy	1974
 \.
 
 
