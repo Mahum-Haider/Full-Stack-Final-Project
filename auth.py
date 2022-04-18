@@ -2,13 +2,18 @@ import os
 import json
 from functools import wraps
 from urllib.request import urlopen
-from flask import request, abort
+from flask import request, abort, _request_ctx_stack, session
 from jose import jwt
 
 
-AUTH0_DOMAIN = os.environ.get('AUTH0_DOMAIN')
-ALGORITHMS = os.environ.get('ALGORITHMS')
-API_AUDIENCE = os.environ.get('API_AUDIENCE')
+# AUTH0_DOMAIN = os.environ.get('AUTH0_DOMAIN')
+# ALGORITHMS = os.environ.get('ALGORITHMS')
+# API_AUDIENCE = os.environ.get('API_AUDIENCE')
+
+AUTH0_DOMAIN = "dev-2ao8q5no.us.auth0.com"
+ALGORITHMS = ['RS256']
+API_AUDIENCE = "castingagency"
+
 
 class AuthError(Exception):
     #A standardized way to communicate auth issues when trying to log into the app
@@ -17,23 +22,65 @@ class AuthError(Exception):
         self.status_code = status_code
 
 def get_token_auth_header():
-    if "Authorization" not in request.headers:
-        abort(401)
+    # if "Authorization" not in request.headers:
+    #     abort(401)
 
-    auth_header = request.headers["Authorization"]
-    header_parts = auth_header.split(" ")
-    if len(header_parts) != 2:
-        abort(401)
-    elif header_parts[0].lower() != "bearer":
-        abort(401)
+    auth = request.headers.get('Authorization', None)
 
-    return header_parts[1]
+    if not auth:
+        raise AuthError({
+            'code': 'authorization_header_missing',
+            'description': 'Authorization header is expected.'
+        }, 401)
+
+    parts = auth.split()
+    if parts[0].lower() != 'bearer':
+        raise AuthError({
+            'code': 'invalid_header',
+            'description': 'Authorization header must start with "Bearer".'
+        }, 401)
+
+    elif len(parts) == 1:
+        raise AuthError({
+            'code': 'invalid_header',
+            'description': 'Token not found.'
+        }, 401)
+
+    elif len(parts) > 2:
+        raise AuthError({
+            'code': 'invalid_header',
+            'description': 'Authorization header must be bearer token.'
+        }, 401)
+
+    token = parts[1]
+    return token
+
+# @app.errorhandler(AuthError)
+# def authentification_failed(AuthError):
+#     return jsonify({
+#         "success": False,
+#         "error": AuthError.status_code,
+#         "message": get_error_message(AuthError.error, "authentification fails")
+#     }), 401
+    
+def check_permissions(permission, payload):
+    if 'permissions' not in payload:
+        raise AuthError({
+            'code': 'invalid_claims',
+            'description': 'Permissions not included in JWT.'
+        }, 400)
+
+    if permission not in payload['permissions']:
+        raise AuthError({
+            'code': 'unauthorized',
+            'description': 'Requested Permission not found.'
+        }, 401)
+
+    return True
+
+
 
 def verify_decode_jwt(token):
-    """
-    Verifies decoded jwt token
-    """
-    # verify the token using Auth0 /.well-known/jwks.json
     jsonurl = urlopen(f'https://{AUTH0_DOMAIN}/.well-known/jwks.json')
     jwks = json.loads(jsonurl.read())
     unverified_header = jwt.get_unverified_header(token)
@@ -84,31 +131,14 @@ def verify_decode_jwt(token):
                 'description': 'Unable to parse authentication token.'
             }, 400)
     raise AuthError({
-                'code': 'invalid_header',
-                'description': 'Unable to find the appropriate key.'
-            }, 400)
+        'code': 'invalid_header',
+        'description': 'Unable to find the appropriate key.'
+    }, 400)
 
 
-def check_permissions(permission, payload):
-    if 'permissions' not in payload:
-        raise AuthError({
-            'code': 'invalid_claims',
-            'description': 'Permissions not included in JWT.'
-        }, 400)
-
-    if permission not in payload['permissions']:
-        raise AuthError({
-            'code': 'unauthorized',
-            'description': 'Requested Permission not found.'
-        }, 401)
-
-    return True
 
 
 def requires_auth(permission=''):
-    """
-    Set up decorator
-    """
     def requires_auth_decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
